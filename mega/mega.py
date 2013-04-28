@@ -364,22 +364,22 @@ class Mega(object):
 
     ##########################################################################
     # DOWNLOAD
-    def download(self, file, dest_path=None):
+    def download(self, file, dest_path=None, on_progression_updated=None):
         """
         Download a file by it's file object
         """
-        self.download_file(None, None, file=file[1], dest_path=dest_path, is_public=False)
+        self.download_file(None, None, file=file[1], dest_path=dest_path, is_public=False, on_progression_updated=on_progression_updated)
 
-    def download_url(self, url, dest_path=None):
+    def download_url(self, url, dest_path=None, on_progression_updated=None):
         """
         Download a file by it's public url
         """
         path = self.parse_url(url).split('!')
         file_id = path[0]
         file_key = path[1]
-        self.download_file(file_id, file_key, dest_path, is_public=True)
+        self.download_file(file_id, file_key, dest_path, is_public=True, on_progression_updated=on_progression_updated)
 
-    def download_file(self, file_handle, file_key, dest_path=None, is_public=False, file=None):
+    def download_file(self, file_handle, file_key, dest_path=None, is_public=False, file=None, on_progression_updated=None):
         if file is None :
             if is_public:
                 file_key = base64_to_a32(file_key)
@@ -422,10 +422,12 @@ class Mega(object):
         aes = AES.new(a32_to_str(k), AES.MODE_CTR, counter=counter)
 
         file_mac = (0, 0, 0, 0)
+        progression = 0
         for chunk_start, chunk_size in sorted(get_chunks(file_size).items()):
             chunk = input_file.read(chunk_size)
             chunk = aes.decrypt(chunk)
             temp_output_file.write(chunk)
+            progression += len(chunk)
 
             chunk_mac = [iv[0], iv[1], iv[0], iv[1]]
             for i in range(0, len(chunk), 16):
@@ -448,9 +450,10 @@ class Mega(object):
             file_mac = aes_cbc_encrypt_a32(file_mac, k)
 
             if self.options.get('verbose') is True:
-                # temp file size
-                file_info = os.stat(temp_output_file.name)
-                print('{0} of {1} downloaded'.format(file_info.st_size, file_size))
+                print('{0} of {1} downloaded'.format(progression, file_size))
+
+            if on_progression_updated is not None :
+                on_progression_updated(progression=progression, total=file_size)
 
         temp_output_file.close()
 
@@ -462,7 +465,7 @@ class Mega(object):
 
     ##########################################################################
     # UPLOAD
-    def upload(self, filename, dest=None):
+    def upload(self, filename, dest=None, on_progression_updated=None):
         #determine storage node
         if dest is None:
             #if none set, upload to cloud drive node
@@ -481,8 +484,10 @@ class Mega(object):
         aes = AES.new(a32_to_str(ul_key[:4]), AES.MODE_CTR, counter=count)
 
         file_mac = [0, 0, 0, 0]
+        progression = 0
         for chunk_start, chunk_size in sorted(get_chunks(size).items()):
             chunk = input_file.read(chunk_size)
+            progression += len(chunk)
 
             #determine chunks mac
             chunk_mac = [ul_key[4], ul_key[5], ul_key[4], ul_key[5]]
@@ -507,6 +512,12 @@ class Mega(object):
             output_file = requests.post(ul_url + "/" + str(chunk_start),
                                         data=chunk, timeout=self.timeout)
             completion_file_handle = output_file.text
+
+            if self.options.get('verbose') is True:
+                print('{0} of {1} uploaded'.format(progression, size))
+
+            if on_progression_updated is not None :
+                on_progression_updated(progression=progression, total=size)
 
         #determine meta mac
         meta_mac = (file_mac[0] ^ file_mac[1], file_mac[2] ^ file_mac[3])
