@@ -490,6 +490,43 @@ class Mega(object):
 
         shutil.move(temp_output_file.name, dest_path + file_name)
 
+    def check_mac(self, file, filename) :
+        k = file['k']
+        iv = file['iv']
+        meta_mac = file['meta_mac']
+        file_size = file['s']
+
+        input_file = open(filename, 'rb')
+        
+        file_mac = (0, 0, 0, 0)
+        for chunk_start, chunk_size in sorted(get_chunks(file_size).items()):
+            chunk = input_file.read(chunk_size)
+
+            chunk_mac = [iv[0], iv[1], iv[0], iv[1]]
+            for i in range(0, len(chunk), 16):
+                block = chunk[i:i + 16]
+                if len(block) % 16:
+                    block += '\0' * (16 - (len(block) % 16))
+                block = str_to_a32(block)
+                chunk_mac = [
+                    chunk_mac[0] ^ block[0],
+                    chunk_mac[1] ^ block[1],
+                    chunk_mac[2] ^ block[2],
+                    chunk_mac[3] ^ block[3]]
+                chunk_mac = aes_cbc_encrypt_a32(chunk_mac, k)
+
+            file_mac = [
+                file_mac[0] ^ chunk_mac[0],
+                file_mac[1] ^ chunk_mac[1],
+                file_mac[2] ^ chunk_mac[2],
+                file_mac[3] ^ chunk_mac[3]]
+            file_mac = aes_cbc_encrypt_a32(file_mac, k)
+
+        # check mac integrity
+        if (file_mac[0] ^ file_mac[1], file_mac[2] ^ file_mac[3]) != meta_mac:
+            raise ValueError('Mismatched mac')
+        
+
     def download_file_noaes_nomac(self, file_handle, file_key, dest_path=None, is_public=False, file=None):
         if file is None :
             if is_public:
