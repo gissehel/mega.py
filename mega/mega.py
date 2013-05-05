@@ -501,27 +501,27 @@ class Mega(object):
 
         input_file = open(filename, 'rb')
         
-        file_mac = (0, 0, 0, 0)
-        kstr = a32_to_str(k)
+        # file_mac = (0, 0, 0, 0)
+        k_str = a32_to_str(k)
+
+        iv_str = a32_to_str([iv[0], iv[1], iv[0], iv[1]])
+        mac_str = a32_to_str([0, 0, 0, 0])
+        mac_encryptor = get_aes_cbc_encryptor(k_str, mac_str)
 
         for chunk_start, chunk_size in sorted(get_chunks(file_size).items()):
             chunk = input_file.read(chunk_size)
-
-            chunk_mac = a32_to_str( [iv[0], iv[1], iv[0], iv[1]] )
-            for i in range(0, len(chunk), 16):
+            
+            encryptor = get_aes_cbc_encryptor(k_str, iv_str)
+            for i in range(0, len(chunk)-16, 16):
                 block = chunk[i:i + 16]
-                if len(block) % 16:
-                    block += '\0' * (16 - (len(block) % 16))
-                chunk_mac = aes_cbc_encrypt_with_iv(block, kstr, chunk_mac)
-            chunk_mac = str_to_a32(chunk_mac)
-
-
-            file_mac = [
-                file_mac[0] ^ chunk_mac[0],
-                file_mac[1] ^ chunk_mac[1],
-                file_mac[2] ^ chunk_mac[2],
-                file_mac[3] ^ chunk_mac[3]]
-            file_mac = aes_cbc_encrypt_a32(file_mac, k)
+                encryptor.encrypt(block)
+            i += 16
+            block = chunk[i:i + 16]
+            if len(block) % 16:
+                block += '\0' * (16 - (len(block) % 16))
+            chunk_mac = encryptor.encrypt(block)
+            mac_str = mac_encryptor.encrypt(chunk_mac)
+        file_mac = str_to_a32(mac_str)
 
         # check mac integrity
         if (file_mac[0] ^ file_mac[1], file_mac[2] ^ file_mac[3]) != meta_mac:

@@ -9,6 +9,9 @@ def aes_cbc_encrypt_with_iv(data, key, iv):
     aes_cipher = AES.new(key, AES.MODE_CBC, iv)
     return aes_cipher.encrypt(data)
 
+def get_aes_cbc_encryptor(key, iv):
+    return AES.new(key, AES.MODE_CBC, iv)
+
 def aes_cbc_encrypt(data, key):
     aes_cipher = AES.new(key, AES.MODE_CBC, '\0' * 16)
     return aes_cipher.encrypt(data)
