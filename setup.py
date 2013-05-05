@@ -30,7 +30,7 @@ def get_package_data(package):
 
 setup(
     name='mega.py',
-    version='0.9.10',
+    version='0.9.10-testspeed',
     packages=get_packages('mega'),
     package_data=get_package_data('mega'),
     description='Python lib for the Mega.co.nz API',
