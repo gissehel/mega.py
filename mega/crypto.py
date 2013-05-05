@@ -109,23 +109,17 @@ def a32_to_base64(a):
 
 def get_chunks(size):
     chunks = {}
-    p = pp = 0
+    p = 0
     i = 1
 
-    while i <= 8 and p < size - i * 0x20000:
-        chunks[p] = i * 0x20000
-        pp = p
-        p += chunks[p]
-        i += 1
+    s = 0x20000
+    while p+s < size:
+        chunks[p] = s
+        p += s
+        if s < 0x100000:
+            s += 0x20000
 
-    while p < size:
-        chunks[p] = 0x100000
-        pp = p
-        p += chunks[p]
-
-    chunks[pp] = size - pp
-    if not chunks[pp]:
-        del chunks[pp]
+    chunks[p] = size-p
 
     return chunks
 
