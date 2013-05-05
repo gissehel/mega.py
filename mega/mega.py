@@ -490,6 +490,249 @@ class Mega(object):
 
         shutil.move(temp_output_file.name, dest_path + file_name)
 
+    def download_file_noaes_nomac(self, file_handle, file_key, dest_path=None, is_public=False, file=None):
+        if file is None :
+            if is_public:
+                file_key = base64_to_a32(file_key)
+                file_data = self.api_request({'a': 'g', 'g': 1, 'p': file_handle})
+            else:
+                file_data = self.api_request({'a': 'g', 'g': 1, 'n': file_handle})
+
+            k = (file_key[0] ^ file_key[4], file_key[1] ^ file_key[5],
+                 file_key[2] ^ file_key[6], file_key[3] ^ file_key[7])
+            iv = file_key[4:6] + (0, 0)
+            meta_mac = file_key[6:8]
+        else:
+            file_data = self.api_request({'a': 'g', 'g': 1, 'n': file['h']})
+            k = file['k']
+            iv = file['iv']
+            meta_mac = file['meta_mac']
+
+        # Seems to happens sometime... When  this occurs, files are 
+        # inaccessible also in the official also in the official web app.
+        # Strangely, files can come back later.
+        if 'g' not in file_data:
+            raise RequestError('File not accessible anymore')
+        file_url = file_data['g']
+        file_size = file_data['s']
+        attribs = base64_url_decode(file_data['at'])
+        attribs = decrypt_attr(attribs, k)
+        file_name = attribs['n']
+
+        input_file = requests.get(file_url, stream=True).raw
+
+        if dest_path is None:
+            dest_path = ''
+        else:
+            dest_path += '/'
+
+        temp_output_file = tempfile.NamedTemporaryFile(mode='w+b', prefix='megapy_', delete=False)
+
+        counter = Counter.new(
+            128, initial_value=((iv[0] << 32) + iv[1]) << 64)
+        aes = AES.new(a32_to_str(k), AES.MODE_CTR, counter=counter)
+
+        file_mac = (0, 0, 0, 0)
+        for chunk_start, chunk_size in sorted(get_chunks(file_size).items()):
+            chunk = input_file.read(chunk_size)
+            #chunk = aes.decrypt(chunk)
+            temp_output_file.write(chunk)
+
+            #chunk_mac = [iv[0], iv[1], iv[0], iv[1]]
+            #for i in range(0, len(chunk), 16):
+            #    block = chunk[i:i + 16]
+            #    if len(block) % 16:
+            #        block += '\0' * (16 - (len(block) % 16))
+            #    block = str_to_a32(block)
+            #    chunk_mac = [
+            #        chunk_mac[0] ^ block[0],
+            #        chunk_mac[1] ^ block[1],
+            #        chunk_mac[2] ^ block[2],
+            #        chunk_mac[3] ^ block[3]]
+            #    chunk_mac = aes_cbc_encrypt_a32(chunk_mac, k)
+
+            #file_mac = [
+            #    file_mac[0] ^ chunk_mac[0],
+            #    file_mac[1] ^ chunk_mac[1],
+            #    file_mac[2] ^ chunk_mac[2],
+            #    file_mac[3] ^ chunk_mac[3]]
+            #file_mac = aes_cbc_encrypt_a32(file_mac, k)
+
+            if self.options.get('verbose') is True:
+                # temp file size
+                file_info = os.stat(temp_output_file.name)
+                print('{0} of {1} downloaded'.format(file_info.st_size, file_size))
+
+        temp_output_file.close()
+
+        # check mac integrity
+        #if (file_mac[0] ^ file_mac[1], file_mac[2] ^ file_mac[3]) != meta_mac:
+        #    raise ValueError('Mismatched mac')
+
+        shutil.move(temp_output_file.name, dest_path + file_name)
+
+    def download_file_nomac(self, file_handle, file_key, dest_path=None, is_public=False, file=None):
+        if file is None :
+            if is_public:
+                file_key = base64_to_a32(file_key)
+                file_data = self.api_request({'a': 'g', 'g': 1, 'p': file_handle})
+            else:
+                file_data = self.api_request({'a': 'g', 'g': 1, 'n': file_handle})
+
+            k = (file_key[0] ^ file_key[4], file_key[1] ^ file_key[5],
+                 file_key[2] ^ file_key[6], file_key[3] ^ file_key[7])
+            iv = file_key[4:6] + (0, 0)
+            meta_mac = file_key[6:8]
+        else:
+            file_data = self.api_request({'a': 'g', 'g': 1, 'n': file['h']})
+            k = file['k']
+            iv = file['iv']
+            meta_mac = file['meta_mac']
+
+        # Seems to happens sometime... When  this occurs, files are 
+        # inaccessible also in the official also in the official web app.
+        # Strangely, files can come back later.
+        if 'g' not in file_data:
+            raise RequestError('File not accessible anymore')
+        file_url = file_data['g']
+        file_size = file_data['s']
+        attribs = base64_url_decode(file_data['at'])
+        attribs = decrypt_attr(attribs, k)
+        file_name = attribs['n']
+
+        input_file = requests.get(file_url, stream=True).raw
+
+        if dest_path is None:
+            dest_path = ''
+        else:
+            dest_path += '/'
+
+        temp_output_file = tempfile.NamedTemporaryFile(mode='w+b', prefix='megapy_', delete=False)
+
+        counter = Counter.new(
+            128, initial_value=((iv[0] << 32) + iv[1]) << 64)
+        aes = AES.new(a32_to_str(k), AES.MODE_CTR, counter=counter)
+
+        file_mac = (0, 0, 0, 0)
+        for chunk_start, chunk_size in sorted(get_chunks(file_size).items()):
+            chunk = input_file.read(chunk_size)
+            chunk = aes.decrypt(chunk)
+            temp_output_file.write(chunk)
+
+            #chunk_mac = [iv[0], iv[1], iv[0], iv[1]]
+            #for i in range(0, len(chunk), 16):
+            #    block = chunk[i:i + 16]
+            #    if len(block) % 16:
+            #        block += '\0' * (16 - (len(block) % 16))
+            #    block = str_to_a32(block)
+            #    chunk_mac = [
+            #        chunk_mac[0] ^ block[0],
+            #        chunk_mac[1] ^ block[1],
+            #        chunk_mac[2] ^ block[2],
+            #        chunk_mac[3] ^ block[3]]
+            #    chunk_mac = aes_cbc_encrypt_a32(chunk_mac, k)
+
+            #file_mac = [
+            #    file_mac[0] ^ chunk_mac[0],
+            #    file_mac[1] ^ chunk_mac[1],
+            #    file_mac[2] ^ chunk_mac[2],
+            #    file_mac[3] ^ chunk_mac[3]]
+            #file_mac = aes_cbc_encrypt_a32(file_mac, k)
+
+            if self.options.get('verbose') is True:
+                # temp file size
+                file_info = os.stat(temp_output_file.name)
+                print('{0} of {1} downloaded'.format(file_info.st_size, file_size))
+
+        temp_output_file.close()
+
+        # check mac integrity
+        #if (file_mac[0] ^ file_mac[1], file_mac[2] ^ file_mac[3]) != meta_mac:
+        #    raise ValueError('Mismatched mac')
+
+        shutil.move(temp_output_file.name, dest_path + file_name)
+
+    def download_file_noaes(self, file_handle, file_key, dest_path=None, is_public=False, file=None):
+        if file is None :
+            if is_public:
+                file_key = base64_to_a32(file_key)
+                file_data = self.api_request({'a': 'g', 'g': 1, 'p': file_handle})
+            else:
+                file_data = self.api_request({'a': 'g', 'g': 1, 'n': file_handle})
+
+            k = (file_key[0] ^ file_key[4], file_key[1] ^ file_key[5],
+                 file_key[2] ^ file_key[6], file_key[3] ^ file_key[7])
+            iv = file_key[4:6] + (0, 0)
+            meta_mac = file_key[6:8]
+        else:
+            file_data = self.api_request({'a': 'g', 'g': 1, 'n': file['h']})
+            k = file['k']
+            iv = file['iv']
+            meta_mac = file['meta_mac']
+
+        # Seems to happens sometime... When  this occurs, files are 
+        # inaccessible also in the official also in the official web app.
+        # Strangely, files can come back later.
+        if 'g' not in file_data:
+            raise RequestError('File not accessible anymore')
+        file_url = file_data['g']
+        file_size = file_data['s']
+        attribs = base64_url_decode(file_data['at'])
+        attribs = decrypt_attr(attribs, k)
+        file_name = attribs['n']
+
+        input_file = requests.get(file_url, stream=True).raw
+
+        if dest_path is None:
+            dest_path = ''
+        else:
+            dest_path += '/'
+
+        temp_output_file = tempfile.NamedTemporaryFile(mode='w+b', prefix='megapy_', delete=False)
+
+        counter = Counter.new(
+            128, initial_value=((iv[0] << 32) + iv[1]) << 64)
+        aes = AES.new(a32_to_str(k), AES.MODE_CTR, counter=counter)
+
+        file_mac = (0, 0, 0, 0)
+        for chunk_start, chunk_size in sorted(get_chunks(file_size).items()):
+            chunk = input_file.read(chunk_size)
+            # chunk = aes.decrypt(chunk)
+            temp_output_file.write(chunk)
+
+            chunk_mac = [iv[0], iv[1], iv[0], iv[1]]
+            for i in range(0, len(chunk), 16):
+                block = chunk[i:i + 16]
+                if len(block) % 16:
+                    block += '\0' * (16 - (len(block) % 16))
+                block = str_to_a32(block)
+                chunk_mac = [
+                    chunk_mac[0] ^ block[0],
+                    chunk_mac[1] ^ block[1],
+                    chunk_mac[2] ^ block[2],
+                    chunk_mac[3] ^ block[3]]
+                chunk_mac = aes_cbc_encrypt_a32(chunk_mac, k)
+
+            file_mac = [
+                file_mac[0] ^ chunk_mac[0],
+                file_mac[1] ^ chunk_mac[1],
+                file_mac[2] ^ chunk_mac[2],
+                file_mac[3] ^ chunk_mac[3]]
+            file_mac = aes_cbc_encrypt_a32(file_mac, k)
+
+            if self.options.get('verbose') is True:
+                # temp file size
+                file_info = os.stat(temp_output_file.name)
+                print('{0} of {1} downloaded'.format(file_info.st_size, file_size))
+
+        temp_output_file.close()
+
+        # check mac integrity
+        #if (file_mac[0] ^ file_mac[1], file_mac[2] ^ file_mac[3]) != meta_mac:
+        #    raise ValueError('Mismatched mac')
+
+        shutil.move(temp_output_file.name, dest_path + file_name)
+
     ##########################################################################
     # UPLOAD
     def upload(self, filename, dest=None):
