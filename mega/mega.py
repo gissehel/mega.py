@@ -611,3 +611,81 @@ class Mega(object):
 
         #return API msg
         return data
+
+    def get_public_url_informations(self, url):
+        """
+        Get size and name from a public url
+        """
+        file_handle, file_key = self.parse_url(url).split('!')
+        return self.get_public_file_informations(file_handle, file_key)
+
+    def import_public_url(self, url, dest_node=None, dest_name=None):
+        """
+        Import the public url into user account
+        """
+        file_handle, file_key = self.parse_url(url).split('!')
+        return self.import_public_file(file_handle, file_key, dest_node=dest_node, dest_name=dest_name)
+
+    def get_public_file_informations(self, file_handle, file_key):
+        """
+        Get size and name of a public file
+        """
+        data = self.api_request({
+            'a': 'g',
+            'p': file_handle,
+            'ssm': 1})
+
+        #if numeric error code response
+        if isinstance(data, int):
+            raise RequestError(data)
+
+        if 'at' not in data or 's' not in data:
+            raise ValueError("Unexpected result", data)
+
+        key = base64_to_a32(file_key)
+        k = (key[0] ^ key[4], key[1] ^ key[5], key[2] ^ key[6], key[3] ^ key[7])
+
+        size = data['s']
+        uncrypted_attrs = decrypt_attr(base64_url_decode(data['at']), k)
+        if not(uncrypted_attrs):
+            return None
+
+        result = {
+            'size': size,
+            'name': uncrypted_attrs['n']}
+
+        return result
+
+    def import_public_file(self, file_handle, file_key, dest_node=None, dest_name=None):
+        """
+        Import the public file into user account
+        """
+
+        # Providing dest_node spare a server call to retrieve it.
+        if dest_node is None:
+            # Get '/Cloud Drive' folder if  not destination
+            dest_node = self.get_node_by_type(2)[1]
+
+        # Providing dest_name spare a server call to retreive it.
+        if dest_name is None:
+            pl_info = self.get_public_file_informations(file_handle, file_key)
+            dest_name = pl_info['name']
+
+        key = base64_to_a32(file_key)
+        k = (key[0] ^ key[4], key[1] ^ key[5], key[2] ^ key[6], key[3] ^ key[7])
+
+        crypted_key = a32_to_base64(encrypt_key(key, self.master_key))
+        crypted_name = base64_url_encode(encrypt_attr({'n':dest_name}, k))
+
+        data = self.api_request({
+            'a': 'p',
+            't': dest_node['h'],
+            'n': [{
+                'ph': file_handle,
+                't': 0,
+                'a': crypted_name,
+                'k': crypted_key}]})
+
+        #return API msg
+        return data
+

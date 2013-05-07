@@ -65,6 +65,12 @@ m.download(file)
 m.download_url('https://mega.co.nz/#!utYjgSTQ!OM4U3V5v_W4N5edSo0wolg1D5H0fwSrLD3oLnLuS9pc')
 m.download(file, '/home/john-smith/Desktop')
 ```
+### Import a file from URL, optionally specify destination folder
+```python
+m.import_public_url('https://mega.co.nz/#!utYjgSTQ!OM4U3V5v_W4N5edSo0wolg1D5H0fwSrLD3oLnLuS9pc')
+folder_node = m.find('Documents')[1]
+m.import_public_url('https://mega.co.nz/#!utYjgSTQ!OM4U3V5v_W4N5edSo0wolg1D5H0fwSrLD3oLnLuS9pc', dest_node=folder_node)
+```
 ### Create a folder
 ```python
 m.create_folder('new_folder')
